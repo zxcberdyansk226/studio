@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowUp, ArrowDown } from 'lucide-react';
-import OrderBook from './order-book';
 import CryptoIcon from './crypto-icon';
 import { useToast } from "@/hooks/use-toast";
 import Image from 'next/image';
@@ -253,7 +252,6 @@ export default function TradingView({ balance, setBalance, positions, addPositio
           </CardContent>
         </Card>
 
-        <OrderBook coin={selectedCoin} />
       </div>
     </div>
   );
