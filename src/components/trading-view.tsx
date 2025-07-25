@@ -31,21 +31,87 @@ const MOCK_PRICES: Record<CryptoAsset, number> = {
   SOL: 150.00,
 };
 
+const assetToBinanceTicker: Record<CryptoAsset, string> = {
+  BTC: 'BTCUSDT',
+  ETH: 'ETHUSDT',
+  SOL: 'SOLUSDT',
+};
+
 export default function TradingView({ balance, setBalance, positions, addPosition, closePosition }: TradingViewProps) {
   const [selectedCoin, setSelectedCoin] = useState<CryptoAsset>('BTC');
   const [currentPrices, setCurrentPrices] = useState(MOCK_PRICES);
   const [amount, setAmount] = useState('1000');
   const { toast } = useToast();
+  const [initialPrices, setInitialPrices] = useState(MOCK_PRICES);
+
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentPrices(prevPrices => ({
-        BTC: prevPrices.BTC * (1 + (Math.random() - 0.5) * 0.001),
-        ETH: prevPrices.ETH * (1 + (Math.random() - 0.5) * 0.002),
-        SOL: prevPrices.SOL * (1 + (Math.random() - 0.5) * 0.005),
-      }));
-    }, 1500);
-    return () => clearInterval(interval);
+    const fetchInitialPrices = async () => {
+      try {
+        const responses = await Promise.all(Object.values(assetToBinanceTicker).map(ticker => 
+          fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${ticker}`)
+        ));
+        const data = await Promise.all(responses.map(res => res.json()));
+        
+        const newPrices: Partial<Record<CryptoAsset, number>> = {};
+        data.forEach(item => {
+          const asset = Object.keys(assetToBinanceTicker).find(key => assetToBinanceTicker[key as CryptoAsset] === item.symbol) as CryptoAsset | undefined;
+          if (asset) {
+            newPrices[asset] = parseFloat(item.price);
+          }
+        });
+        
+        const fullPrices = { ...MOCK_PRICES, ...newPrices };
+        setCurrentPrices(fullPrices);
+        setInitialPrices(fullPrices);
+      } catch (error) {
+        console.error("Failed to fetch initial prices from Binance", error);
+        // Fallback to mock prices
+        setCurrentPrices(MOCK_PRICES);
+        setInitialPrices(MOCK_PRICES);
+      }
+    };
+
+    fetchInitialPrices();
+
+    const ws = new WebSocket('wss://stream.binance.com:9443/ws');
+    
+    ws.onopen = () => {
+        const tickers = Object.values(assetToBinanceTicker).map(t => `${t.toLowerCase()}@trade`);
+        ws.send(JSON.stringify({
+            method: "SUBSCRIBE",
+            params: tickers,
+            id: 1
+        }));
+    };
+
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data && data.s && data.p) {
+            const asset = Object.keys(assetToBinanceTicker).find(key => assetToBinanceTicker[key as CryptoAsset] === data.s) as CryptoAsset | undefined;
+            if (asset) {
+                setCurrentPrices(prevPrices => ({
+                    ...prevPrices,
+                    [asset]: parseFloat(data.p)
+                }));
+            }
+        }
+    };
+    
+    ws.onerror = (error) => {
+      console.error("WebSocket Error:", error);
+    };
+
+    return () => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+              method: "UNSUBSCRIBE",
+              params: Object.values(assetToBinanceTicker).map(t => `${t.toLowerCase()}@trade`),
+              id: 1
+          }));
+        }
+        ws.close();
+    };
   }, []);
   
   const handlePlaceOrder = (type: 'Long' | 'Short') => {
@@ -73,6 +139,13 @@ export default function TradingView({ balance, setBalance, positions, addPositio
     const pnl = (currentPrices[position.coin] - position.entryPrice) * (position.size / position.entryPrice);
     return position.type === 'Long' ? pnl : -pnl;
   };
+
+  const get24hChange = (coin: CryptoAsset) => {
+    const current = currentPrices[coin];
+    const initial = initialPrices[coin];
+    if (initial === 0) return 0;
+    return ((current - initial) / initial) * 100;
+  };
   
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -85,10 +158,10 @@ export default function TradingView({ balance, setBalance, positions, addPositio
                 <CardTitle className="font-headline">{selectedCoin}/USD</CardTitle>
               </div>
               <div className="text-right">
-                <p className={`text-2xl font-bold ${currentPrices[selectedCoin] > MOCK_PRICES[selectedCoin] ? 'text-green-500' : 'text-red-500'}`}>
+                <p className={`text-2xl font-bold ${currentPrices[selectedCoin] >= initialPrices[selectedCoin] ? 'text-green-500' : 'text-red-500'}`}>
                     {currentPrices[selectedCoin].toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                 </p>
-                <p className="text-sm text-muted-foreground">24h Change: <span className={currentPrices[selectedCoin] > MOCK_PRICES[selectedCoin] ? 'text-green-500' : 'text-red-500'}>{((currentPrices[selectedCoin] / MOCK_PRICES[selectedCoin] - 1) * 100).toFixed(2)}%</span></p>
+                <p className="text-sm text-muted-foreground">24h Change: <span className={get24hChange(selectedCoin) >= 0 ? 'text-green-500' : 'text-red-500'}>{get24hChange(selectedCoin).toFixed(2)}%</span></p>
               </div>
             </div>
           </CardHeader>

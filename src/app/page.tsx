@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
-import { Flame, Star } from 'lucide-react';
+import { Flame, Star, User } from 'lucide-react';
 import TradingView from '@/components/trading-view';
 import WalletView from '@/components/wallet-view';
 import TournamentsView from '@/components/tournaments-view';
@@ -21,6 +21,23 @@ export default function Home() {
   const [balance, setBalance] = useState(10000);
   const [stars, setStars] = useState(5);
   const [positions, setPositions] = useState<Position[]>([]);
+  const [user, setUser] = useState<{ id: number, firstName: string, username?: string } | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) {
+      const tg = window.Telegram.WebApp;
+      tg.ready();
+      const initData = tg.initDataUnsafe;
+      if (initData && initData.user) {
+        setUser({
+          id: initData.user.id,
+          firstName: initData.user.first_name,
+          username: initData.user.username,
+        });
+      }
+    }
+  }, []);
+
 
   const addPosition = (position: Omit<Position, 'id'>) => {
     setPositions(prev => [...prev, { ...position, id: Date.now() }]);
@@ -41,9 +58,14 @@ export default function Home() {
           </h1>
         </div>
         <div className="flex gap-4 items-center">
+          {user && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <User className="w-4 h-4" />
+              <span>{user.firstName} {user.username && `(@${user.username})`}</span>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <span className="font-bold text-lg text-primary">{balance.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-            <span className="text-muted-foreground text-sm">Balance</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="font-bold text-lg text-amber-400">{stars}</span>
@@ -81,4 +103,10 @@ export default function Home() {
       </main>
     </div>
   );
+}
+
+declare global {
+  interface Window {
+    Telegram: any;
+  }
 }
