@@ -18,11 +18,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { ToastAction } from '@/components/ui/toast';
 
 
 interface TournamentsViewProps {
   stars: number;
-  setStars: Dispatch<SetStateAction<number>>;
+  setStars: (stars: number) => void;
 }
 
 const tournaments = [
@@ -45,9 +46,10 @@ export default function TournamentsView({ stars, setStars }: TournamentsViewProp
 
     const handleJoin = (fee: number, id: number) => {
         if (stars >= fee) {
-            setStars(s => s - fee);
+            const newStars = stars - fee;
+            setStars(newStars);
             setJoined(j => [...j, id]);
-            toast({ title: "Successfully joined tournament!", description: `Your balance is now ${stars - fee} stars.` });
+            toast({ title: "Successfully joined tournament!", description: `Your balance is now ${newStars} stars.` });
         } else {
             toast({ variant: "destructive", title: "Not enough stars!", description: "You need more stars to join this tournament." });
         }

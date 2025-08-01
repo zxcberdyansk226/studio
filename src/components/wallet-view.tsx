@@ -1,15 +1,16 @@
 "use client";
 
-import type { Dispatch, SetStateAction } from 'react';
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from "@/components/ui/progress";
 import { Coins } from 'lucide-react';
+// Note: In a real app, you would have an action to update the balance on the server.
+// For this simulation, we'll continue updating the local state passed via props.
 
 interface WalletViewProps {
   balance: number;
-  setBalance: Dispatch<SetStateAction<number>>;
+  setBalance: (newBalance: number) => void;
 }
 
 const MAX_BALANCE = 100000;
@@ -19,7 +20,8 @@ export default function WalletView({ balance, setBalance }: WalletViewProps) {
   const [clickAnimation, setClickAnimation] = useState(false);
 
   const handleCoinClick = () => {
-    setBalance(prev => Math.min(prev + CLICK_VALUE, MAX_BALANCE));
+    const newBalance = Math.min(balance + CLICK_VALUE, MAX_BALANCE);
+    setBalance(newBalance); // This will update the state in the parent `Home` component
     setClickAnimation(true);
     setTimeout(() => setClickAnimation(false), 150);
   };

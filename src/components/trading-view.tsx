@@ -18,10 +18,10 @@ type CryptoAsset = 'BTC' | 'ETH' | 'SOL';
 
 interface TradingViewProps {
   balance: number;
-  setBalance: Dispatch<SetStateAction<number>>;
+  setBalance: (balance: number) => void;
   positions: Position[];
-  addPosition: (position: Omit<Position, 'id'>) => void;
-  closePosition: (id: number, pnl: number) => void;
+  addPosition: (position: Omit<Position, 'id'>) => Promise<void>;
+  closePosition: (id: number, pnl: number) => Promise<void>;
 }
 
 const MOCK_PRICES: Record<CryptoAsset, number> = {
@@ -42,6 +42,7 @@ export default function TradingView({ balance, setBalance, positions, addPositio
   const [amount, setAmount] = useState('1000');
   const { toast } = useToast();
   const [initialPrices, setInitialPrices] = useState(MOCK_PRICES);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
 
   useEffect(() => {
@@ -113,26 +114,44 @@ export default function TradingView({ balance, setBalance, positions, addPositio
     };
   }, []);
   
-  const handlePlaceOrder = (type: 'Long' | 'Short') => {
+  const handlePlaceOrder = async (type: 'Long' | 'Short') => {
+    setIsSubmitting(true);
     const tradeAmount = parseFloat(amount);
     if (isNaN(tradeAmount) || tradeAmount <= 0) {
       toast({ variant: "destructive", title: "Invalid Amount", description: "Please enter a positive number." });
+      setIsSubmitting(false);
       return;
     }
     if (tradeAmount > balance) {
         toast({ variant: "destructive", title: "Insufficient Balance", description: "You don't have enough balance for this trade." });
+      setIsSubmitting(false);
       return;
     }
 
-    addPosition({
-      coin: selectedCoin,
-      type,
-      entryPrice: currentPrices[selectedCoin],
-      size: tradeAmount,
-    });
-    setBalance(prev => prev - tradeAmount);
-    toast({ title: "Order Placed", description: `${type} order of ${tradeAmount} on ${selectedCoin} placed successfully.` });
+    try {
+      await addPosition({
+        coin: selectedCoin,
+        type,
+        entryPrice: currentPrices[selectedCoin],
+        size: tradeAmount,
+      });
+      toast({ title: "Order Placed", description: `${type} order of ${tradeAmount} on ${selectedCoin} placed successfully.` });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Order Failed", description: "Could not place the order. Please try again." });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  const handleClosePosition = async (position: Position) => {
+    const pnl = getPnl(position);
+    try {
+        await closePosition(position.id, position.size + pnl)
+        toast({ title: "Position Closed", description: `You realized a PNL of ${pnl.toFixed(2)}.` });
+    } catch (error) {
+        toast({ variant: "destructive", title: "Failed to Close", description: "Could not close position. Please try again." });
+    }
+  }
 
   const getPnl = (position: Position) => {
     const pnl = (currentPrices[position.coin] - position.entryPrice) * (position.size / position.entryPrice);
@@ -202,7 +221,7 @@ export default function TradingView({ balance, setBalance, positions, addPositio
                         <TableCell>{currentPrices[pos.coin].toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</TableCell>
                         <TableCell className={pnl >= 0 ? 'text-green-500' : 'text-red-500'}>{pnl.toFixed(2)}</TableCell>
                         <TableCell>
-                          <Button size="sm" variant="outline" onClick={() => closePosition(pos.id, pos.size + pnl)}>Close</Button>
+                          <Button size="sm" variant="outline" onClick={() => handleClosePosition(pos)}>Close</Button>
                         </TableCell>
                       </TableRow>
                     )
@@ -242,11 +261,11 @@ export default function TradingView({ balance, setBalance, positions, addPositio
               <Input id="amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 1000" />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Button onClick={() => handlePlaceOrder('Long')} className="bg-green-600 hover:bg-green-700 text-white">
-                <ArrowUp className="mr-2 h-4 w-4" /> Long
+              <Button onClick={() => handlePlaceOrder('Long')} className="bg-green-600 hover:bg-green-700 text-white" disabled={isSubmitting}>
+                <ArrowUp className="mr-2 h-4 w-4" /> {isSubmitting ? 'Placing...' : 'Long'}
               </Button>
-              <Button onClick={() => handlePlaceOrder('Short')} className="bg-red-600 hover:bg-red-700 text-white">
-                <ArrowDown className="mr-2 h-4 w-4" /> Short
+              <Button onClick={() => handlePlaceOrder('Short')} className="bg-red-600 hover:bg-red-700 text-white" disabled={isSubmitting}>
+                <ArrowDown className="mr-2 h-4 w-4" /> {isSubmitting ? 'Placing...' : 'Short'}
               </Button>
             </div>
           </CardContent>
