@@ -73,26 +73,18 @@ export default function TradingView({ balance, setBalance, positions, addPositio
     };
 
     fetchInitialPrices();
-
-    const ws = new WebSocket('wss://stream.binance.com:9443/ws');
     
-    ws.onopen = () => {
-        const tickers = Object.values(assetToBinanceTicker).map(t => `${t.toLowerCase()}@trade`);
-        ws.send(JSON.stringify({
-            method: "SUBSCRIBE",
-            params: tickers,
-            id: 1
-        }));
-    };
+    const tickers = Object.values(assetToBinanceTicker).map(t => `${t.toLowerCase()}@trade`).join('/');
+    const ws = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${tickers}`);
 
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        if (data && data.s && data.p) {
-            const asset = Object.keys(assetToBinanceTicker).find(key => assetToBinanceTicker[key as CryptoAsset] === data.s) as CryptoAsset | undefined;
+        if (data.data && data.data.s && data.data.p) {
+            const asset = Object.keys(assetToBinanceTicker).find(key => assetToBinanceTicker[key as CryptoAsset] === data.data.s) as CryptoAsset | undefined;
             if (asset) {
                 setCurrentPrices(prevPrices => ({
                     ...prevPrices,
-                    [asset]: parseFloat(data.p)
+                    [asset]: parseFloat(data.data.p)
                 }));
             }
         }
@@ -104,13 +96,8 @@ export default function TradingView({ balance, setBalance, positions, addPositio
 
     return () => {
         if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-              method: "UNSUBSCRIBE",
-              params: Object.values(assetToBinanceTicker).map(t => `${t.toLowerCase()}@trade`),
-              id: 1
-          }));
+          ws.close();
         }
-        ws.close();
     };
   }, []);
   
